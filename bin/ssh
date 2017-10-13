@@ -1,30 +1,31 @@
 #!/bin/bash
 
-set -ex
+set -e
 
 SHNAME=$(basename $0)
 
-if [[ $SSH_DYNAMIC_WRAPPED = true ]]; then
-  echo "ERROR: Loop detected: $0" 1>&2
+cache_dir="${SSH_CACHE_DIR:-$HOME/.cache/ssh_dynamic_config/$(hostname -f)}"
+cache_file="$cache_dir/config"
+config_generate="${SSH_CONFIG_GENERATE:-$HOME/.ssh/config_generate}"
+
+cmd="/usr/bin/${SHNAME:-ssh}"
+
+if [[ -x "${cmd}.real" ]] || [[ $cmd = $0 ]]; then
+  cmd="${cmd}.real"
+fi
+
+if [[ ! -x $cmd ]]; then
+  echo "ERROR: $cmd must be executable" 1>&2
   exit 1
 fi
 
-export SSH_CONFIG="$HOME/.cache/ssh_config.$(hostname -f)"
-export SSH_DYNAMIC="${SSH_DYNAMIC:-$HOME/.ssh/config.sh}"
-export SSH_DYNAMIC_WRAPPED=true
-
-CMD="/usr/bin/${SHNAME:-ssh}"
-
-if [[ -x "${CMD}.real" ]]; then
-  CMD="${CMD}.real"
-fi
-
-if [[ -x $SSH_DYNAMIC ]]; then
-  if [[ ! -e $SSH_CONFIG ]] || [[ $SSH_DYNAMIC -nt $SSH_CONFIG ]]; then
-    $SSH_DYNAMIC > $SSH_CONFIG
+if [[ -x $config_generate ]]; then
+  mkdir -p $cache_dir
+  if [[ $cache_file -nt $config_generate ]] || $config_generate > $cache_file; then
+    exec ${cmd} -F "$cache_file" "$@"
+  else
+    echo "WARNING: $config_generate returned error code $?" 1>&2
   fi
-
-  exec ${CMD} -F $SSH_CONFIG "$@"
-else
-  exec ${CMD} "$@"
 fi
+
+exec ${cmd} "$@"
