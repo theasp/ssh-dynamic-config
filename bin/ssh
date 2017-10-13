@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set -ex
+
+SHNAME=$(basename $0)
+
+if [[ $SSH_DYNAMIC_WRAPPED = true ]]; then
+  echo "ERROR: Loop detected: $0" 1>&2
+  exit 1
+fi
+
+export SSH_CONFIG="$HOME/.cache/ssh_config.$(hostname -f)"
+export SSH_DYNAMIC="${SSH_DYNAMIC:-$HOME/.ssh/config.sh}"
+export SSH_DYNAMIC_WRAPPED=true
+
+CMD="/usr/bin/${SHNAME:-ssh}"
+
+if [[ -x "${CMD}.real" ]]; then
+  CMD="${CMD}.real"
+fi
+
+if [[ -x $SSH_DYNAMIC ]]; then
+  if [[ ! -e $SSH_CONFIG ]] || [[ $SSH_DYNAMIC -nt $SSH_CONFIG ]]; then
+    $SSH_DYNAMIC > $SSH_CONFIG
+  fi
+
+  exec ${CMD} -F $SSH_CONFIG "$@"
+else
+  exec ${CMD} "$@"
+fi
